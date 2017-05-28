@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleDisplayName</key>
+	<string>Sync Metrics Keys</string>
+	<key>CFBundleExecutable</key>
+	<string>plugin</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.johannesneumeier.SyncMetricsKeys</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Sync Metrics Keys</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleVersion</key>
+	<string>0.0.1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.1a</string>
+	<key>UpdateFeedURL</key>
+	<string>https://raw.githubusercontent.com/underscoretype/glyphs-plugin-sync-metrics-keys/master/SyncMetricsKeys/Contents/Info.plist</string>
+	<key>productPageURL</key>
+	<string>https://github.com/underscoretype/glyphs-plugin-sync-metrics-keys</string>
+	<key>productReleaseNotes</key>
+	<string>https://github.com/underscoretype/glyphs-plugin-sync-metrics-keys</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright, Johannes "kontur" Neumeier, 2017</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPrincipalClass</key>
+	<string>MetricsAutoUpdate</string>
+	<key>PyMainFileNames</key>
+	<array>
+		<string>../MacOS/main.py</string>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,4 @@
+*.glyphsReporter
+*.glyphsPlugin
+*.glyphsFilter
+!SyncMetricsKeys.glyphsReporter
