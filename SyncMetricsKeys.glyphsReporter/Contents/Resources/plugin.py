@@ -31,6 +31,12 @@ class MetricsAutoUpdate(ReporterPlugin):
         # no logging in production version
         self.logging = False
 
+        # variables used to determine when to trigger and update that needs to
+        # be propagated to other glyphs
+        self.lastGlyph = None
+        self.lastLSB = None
+        self.lastRSB = None
+
 
     # use local debugging flag to enable or disable verbose output
     def log(self, message):
@@ -38,8 +44,9 @@ class MetricsAutoUpdate(ReporterPlugin):
             self.logToConsole(message)
         
 
-    def updateMetrics(self, glyph):
+    def updateMetrics(self, layer):
         self.log("updateMetrics")
+        glyph = layer.parent
         
         # keeping the current glyph in sync with any linked metrics keys
         self.syncGlyphMetrics(glyph)
@@ -54,14 +61,15 @@ class MetricsAutoUpdate(ReporterPlugin):
                 self.syncGlyphMetrics(linkedGlyph)
 
 
-    # shortcut for syncing the metrics in all layers in a glyph
+    # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
     def syncGlyphMetrics(self, glyph):
         self.log("syncGlyphMetrics")
         self.log("syncing glyph %s" % str(glyph.name))
         try:
-            for layer in glyph.layers:
-                self.log("layer name %s" % str(layer.name))
-                layer.syncMetrics()
+            layer = glyph.layers[Glyphs.font.selectedFontMaster.id]
+            #for layer in glyph.layers:
+            self.log("layer name %s" % str(layer.name))
+            layer.syncMetrics()
 
         except Exception as e:
             self.log("Error: %s" % str(e))
@@ -110,5 +118,36 @@ class MetricsAutoUpdate(ReporterPlugin):
         return referencedGlyphs
 
 
+    # react to interactions on the foreground
     def foreground(self, layer):
-        self.updateMetrics(layer.parent)
+        glyph = layer.parent
+        update = False
+
+        # only trigger an update to other glyphs if this glyph's LSB or RSB really change
+        if glyph.name != self.lastGlyph or self.lastGlyph is None:
+            self.log("New active glyph %s" % str(layer.parent))
+            self.lastGlyph = glyph.name
+
+            # only even make it possible to trigger an update if the glyph has
+            # numeric LSB or RSB, not a metrics key
+            # if numeric, go ahead and check with last active value            
+            if layer.LSB is not None:
+                if self.lastLSB != layer.LSB and glyph.leftMetricsKey is None:
+                    self.lastLSB = layer.LSB
+                    update = True
+                else:
+                    # not an update to other glyphs, but refresh this glyphs
+                    # references metrics key value
+                    layer.syncMetrics()
+
+            if layer.RSB is not None: 
+                if self.lastRSB != layer.RSB and glyph.rightMetricsKey is None:
+                    self.lastRSB = layer.RSB
+                    update = True
+                else:
+                    # not an update to other glyphs, but refresh this glyphs
+                    # references metrics key value
+                    layer.syncMetrics()
+
+        if update:
+            self.updateMetrics(layer)
