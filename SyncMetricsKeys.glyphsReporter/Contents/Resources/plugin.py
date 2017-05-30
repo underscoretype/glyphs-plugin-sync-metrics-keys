@@ -29,13 +29,15 @@ class MetricsAutoUpdate(ReporterPlugin):
 
     def start(self):
         # no logging in production version
-        self.logging = False
+        self.logging = True
 
         # variables used to determine when to trigger and update that needs to
         # be propagated to other glyphs
         self.lastGlyph = None
         self.lastLSB = None
         self.lastRSB = None
+
+        self.log("Start")
 
 
     # use local debugging flag to enable or disable verbose output
@@ -122,7 +124,7 @@ class MetricsAutoUpdate(ReporterPlugin):
 
         # Only update when the current layer is a real drawing layer (master, or layer
         # in the sidebar panel) - i.e. don't react to an active  GSBackgroundLayer type
-        if layer.className() is not "GSLayer":
+        if layer.className() != "GSLayer":
             return
 
         # only trigger an update to other glyphs if this glyph's LSB or RSB really change
