@@ -47,9 +47,6 @@ class MetricsAutoUpdate(ReporterPlugin):
     def updateMetrics(self, layer):
         self.log("updateMetrics")
         glyph = layer.parent
-        
-        # keeping the current glyph in sync with any linked metrics keys
-        self.syncGlyphMetrics(glyph)
 
         # check if the current glyph is a metrics key in other glyphs, and if so, update them
 
@@ -94,8 +91,8 @@ class MetricsAutoUpdate(ReporterPlugin):
                 # key has other alphabetic characters next to it, like not matching key n in value ntilde
                 # adding re.MULTILINE will match the $ end of line before the "non-alphabetic", which
                 # isn't satisfied by "end of line/string" otherwise
-                regex = "[^a-zA-Z](" + re.escape(key.name) + ")$|[^a-zA-Z]"
-                pattern = re.compile(regex, re.MULTILINE)
+                regex = "[^a-zA-Z]*(" + re.escape(key.name) + ")+[^a-zA-Z]*"
+                pattern = re.compile(regex)
 
                 # also match if the key and the reference simply are equal (no equations used)
                 # LSB
@@ -132,22 +129,30 @@ class MetricsAutoUpdate(ReporterPlugin):
             # numeric LSB or RSB, not a metrics key
             # if numeric, go ahead and check with last active value            
             if layer.LSB is not None:
-                if self.lastLSB != layer.LSB and glyph.leftMetricsKey is None:
-                    self.lastLSB = layer.LSB
-                    update = True
-                else:
-                    # not an update to other glyphs, but refresh this glyphs
-                    # references metrics key value
-                    layer.syncMetrics()
+                if self.lastLSB != layer.LSB:
+                    if glyph.leftMetricsKey is None:
+                        self.lastLSB = layer.LSB
+                        update = True
+                    else:
+                        # not an update to other glyphs, but refresh this glyphs
+                        # references metrics key value
+                        layer.syncMetrics()
 
             if layer.RSB is not None: 
-                if self.lastRSB != layer.RSB and glyph.rightMetricsKey is None:
-                    self.lastRSB = layer.RSB
-                    update = True
-                else:
-                    # not an update to other glyphs, but refresh this glyphs
-                    # references metrics key value
-                    layer.syncMetrics()
+                if self.lastRSB != layer.RSB:
+                    if glyph.rightMetricsKey is None:
+                        self.lastRSB = layer.RSB
+                        update = True
+                    else:
+                        # not an update to other glyphs, but refresh this glyphs
+                        # references metrics key value
+                        layer.syncMetrics()
+        else:
+            if (glyph.leftMetricsKey is not None and self.lastLSB != layer.LSB) or (glyph.rightMetricsKey is not None and self.lastRSB != layer.RSB):
+                self.log("Same glyph, changed metrics")
+                self.lastLSB = layer.LSB
+                self.lastRSB = layer.RSB
+                layer.syncMetrics()
 
         if update:
             self.updateMetrics(layer)
