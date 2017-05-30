@@ -115,10 +115,17 @@ class MetricsAutoUpdate(ReporterPlugin):
         return referencedGlyphs
 
 
-    # react to interactions on the foreground
+    # use the foreground drawing loop hook to check if metrics updates are required
     def foreground(self, layer):
         glyph = layer.parent
         update = False
+
+        # skip updating metrics if the currently active layer is for example the 
+        # background, which has a None value
+        # this will not skip updating in layers that have an empty string name
+        # given to them in the layers palette on the right
+        if layer.name is None:
+            return
 
         # only trigger an update to other glyphs if this glyph's LSB or RSB really change
         if glyph.name != self.lastGlyph or self.lastGlyph is None:
