@@ -120,11 +120,9 @@ class MetricsAutoUpdate(ReporterPlugin):
         glyph = layer.parent
         update = False
 
-        # skip updating metrics if the currently active layer is for example the 
-        # background, which has a None value
-        # this will not skip updating in layers that have an empty string name
-        # given to them in the layers palette on the right
-        if layer.name is None:
+        # Only update when the current layer is a real drawing layer (master, or layer
+        # in the sidebar panel) - i.e. don't react to an active  GSBackgroundLayer type
+        if layer.className() is not "GSLayer":
             return
 
         # only trigger an update to other glyphs if this glyph's LSB or RSB really change
