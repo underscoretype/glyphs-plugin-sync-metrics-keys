@@ -37,10 +37,10 @@ class MetricsAutoUpdate(ReporterPlugin):
         self.lastLSB = None
         self.lastRSB = None
 
-        self.glyphsWithoutMetricsKeys = []
         self.glyphsCached = False
+        self.cache = {}
 
-        self.log("Start")
+        self.log("Syc Metrics Keys Start")
 
 
     # use local debugging flag to enable or disable verbose output
@@ -57,7 +57,14 @@ class MetricsAutoUpdate(ReporterPlugin):
 
         # TODO note that this is not recursive; if h references n, but b references h, 
         # editing n will not update b, because it does not reference n directly
-        linkedGlyphs = self.findGlyphsWithMetricsKey(glyph)
+        
+        if not glyph.name in self.cache:
+            self.log("No links to key %s" % str(glyph.name))
+            return
+
+        linkedGlyphs = self.cache[glyph.name]
+        self.log("LinkedGlyphs from cache")
+        self.log(linkedGlyphs)
         if len(linkedGlyphs) > 0:
             for linkedGlyph in linkedGlyphs:
                 self.syncGlyphMetrics(linkedGlyph)
@@ -74,53 +81,6 @@ class MetricsAutoUpdate(ReporterPlugin):
             self.log("Error: %s" % str(e))
 
 
-    # not differentiating here between left or right
-    # if either side is a reference, return it for processing
-    def findGlyphsWithMetricsKey(self, key):
-        self.log("findGlyphsWithMetricsKey")
-        referencedGlyphs = []
-        try:
-            for glyph in Glyphs.font.glyphs:
-                self.log("Check %s linked %s (metric keys: %s, %s)?" % (glyph.name, key.name, glyph.leftMetricsKey, glyph.rightMetricsKey))
-
-                if glyph.name is key.name:
-                    # skip checking sidebearing keys for the glyph of same name, obviously
-                    continue
-
-                if glyph in self.glyphsWithoutMetricsKeys:
-                    self.log("Skipping %s without metrics keys" % str(glyph.name))
-                    continue
-
-                # looking for a reference to the key in the glyph's metrics keys us a regular
-                # expression that looks for the key only when next to non-alphabetic character
-                # i.e. when used in formulas, like =n-20 or =|n, but will not match when the
-                # key has other alphabetic characters next to it, like not matching key n in value ntilde
-                # adding re.MULTILINE will match the $ end of line before the "non-alphabetic", which
-                # isn't satisfied by "end of line/string" otherwise
-                regex = "[^a-zA-Z]*(" + re.escape(key.name) + ")+[^a-zA-Z]*"
-                pattern = re.compile(regex)
-
-                # also match if the key and the reference simply are equal (no equations used)
-                # LSB
-                if glyph.leftMetricsKey is not None:
-                    if pattern.search(glyph.leftMetricsKey) is not None or glyph.leftMetricsKey == key.name:
-                        self.log("LSB links")
-                        referencedGlyphs.append(glyph)
-
-                # RSB
-                if glyph.rightMetricsKey is not None:
-                    if pattern.search(glyph.rightMetricsKey) is not None or glyph.rightMetricsKey == key.name:
-                        self.log("RSB links")
-                        referencedGlyphs.append(glyph)
-
-        except Exception as e:
-            self.log("Error: %s" % str(e))
-
-        self.log(referencedGlyphs)
-
-        return referencedGlyphs
-
-
     # Helper to check if a glyph has metric keys
     def glyphHasMetricsKeys(self, glyph):
         if glyph.leftMetricsKey is not None or glyph.rightMetricsKey is not None:
@@ -129,31 +89,69 @@ class MetricsAutoUpdate(ReporterPlugin):
             return False
 
 
+    def getGlyphMetricsKeys(self, glyph):
+        self.log("getGlyphMetricsKeys for %s" % str(glyph.name))
+        links = []
+
+        regex = "([a-zA-Z]+)"
+        pattern = re.compile(regex)
+
+        if glyph.leftMetricsKey is not None:
+            for match in re.findall(pattern, glyph.leftMetricsKey):
+                #self.log("match in left: %s" % str(match))
+                links.append(match)
+
+        if glyph.rightMetricsKey is not None:
+            for match in re.findall(pattern, glyph.rightMetricsKey):
+                #self.log("match in right: %s" % str(match))
+                links.append(match)
+
+        return links
+
+
     # Helper function to store all glyphs that won't need to be updated because
     # they don't have any metrics keys in their left or right sidebearings
     def cacheAllGlyphKeys(self):
         for glyph in Glyphs.font.glyphs:
-            if glyph.leftMetricsKey is None and glyph.rightMetricsKey is None:
-                self.glyphsWithoutMetricsKeys.append(glyph)
+            self.cacheGlyphKeys(glyph)
 
-        self.log("Cached glyphs without metrics keys")
-        self.log(self.glyphsWithoutMetricsKeys)
         self.glyphsCached = True
 
         return
 
 
-    # Helper to sync this glyph's metric keys with the cache
-    # If it has no metrics keys, but is not in the cache, remove it
-    # If it has metrics keys, but is in the cache, remove it
     def cacheGlyphKeys(self, glyph):
-        self.log("cacheGlyphKeys for %s" % str(glyph.name))
-        if self.glyphHasMetricsKeys(glyph):
-            if glyph in self.glyphsWithoutMetricsKeys:
-                self.glyphsWithoutMetricsKeys.remove(glyph)
-        else: 
-            if not glyph in self.glyphsWithoutMetricsKeys:
-                self.glyphsWithoutMetricsKeys.append(glyph)
+        # as part of caching this glyph and it's links, first remove it
+        # from any existing keys it might be linked in
+        self.purgeLinkFromCache(glyph)
+
+        # if this glyph has metrics keys, they need to be cached to the 
+        # appropiate keys
+        if not glyph.leftMetricsKey is None or not glyph.rightMetricsKey is None:
+            # if a glyph has metrics links, iterate them and make sure any
+            # referenced keys will trigger an update for this glyph when they
+            # get changed
+            links = self.getGlyphMetricsKeys(glyph)
+            if len(links) > 0:
+                for link in links:
+                    # if the key does not exist in the cache, create it first
+                    if link not in self.cache:
+                        self.cache[link] = []
+
+                    # then add this glyph to be updated when the key-glyph 
+                    # changes   
+                    if glyph not in self.cache[link]:
+                        self.cache[link].append(glyph)
+
+
+    def purgeLinkFromCache(self, glyph):
+        self.log("purge %s from cache links" % str(glyph.name))
+        self.log(self.cache)
+        for key, links in self.cache.iteritems():
+            for link in links:
+                if link == glyph:
+                    self.log("remove link for %s fro key %s" % (str(glyph.name), str(key)))
+                    links.remove(glyph)
 
 
     # use the foreground drawing loop hook to check if metrics updates are required
@@ -164,11 +162,9 @@ class MetricsAutoUpdate(ReporterPlugin):
         # On the first go around cache all glyph keys
         if self.glyphsCached is False:
             self.cacheAllGlyphKeys()
-        else:
-            self.cacheGlyphKeys(glyph)
 
         # Only update when the current layer is a real drawing layer (master, or layer
-        # in the sidebar panel) - i.e. don't react to an active  GSBackgroundLayer type
+        # in the sidebar panel) - i.e. don't react to an active GSBackgroundLayer type
         if layer.className() != "GSLayer":
             return
 
@@ -200,11 +196,17 @@ class MetricsAutoUpdate(ReporterPlugin):
                         # references metrics key value
                         layer.syncMetrics()
         else:
-            if (glyph.leftMetricsKey is not None and self.lastLSB != layer.LSB) or (glyph.rightMetricsKey is not None and self.lastRSB != layer.RSB):
+            if (self.lastLSB != layer.LSB) or (self.lastRSB != layer.RSB):
                 self.log("Same glyph, changed metrics")
                 self.lastLSB = layer.LSB
                 self.lastRSB = layer.RSB
                 layer.syncMetrics()
+                update = True
 
         if update:
+            # before propagating an update to other linked glyphs update 
+            # the caching, so that potential linking / unlinking of this glyph
+            # to other keys gets taken into account
+            self.cacheGlyphKeys(glyph)
+
             self.updateMetrics(layer)
