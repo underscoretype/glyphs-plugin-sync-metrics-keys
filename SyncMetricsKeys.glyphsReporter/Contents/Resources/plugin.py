@@ -29,13 +29,16 @@ class MetricsAutoUpdate(ReporterPlugin):
 
     def start(self):
         # no logging in production version
-        self.logging = True
+        self.logging = False
 
         # variables used to determine when to trigger and update that needs to
         # be propagated to other glyphs
         self.lastGlyph = None
         self.lastLSB = None
         self.lastRSB = None
+
+        self.glyphsWithoutMetricsKeys = []
+        self.glyphsCached = False
 
         self.log("Start")
 
@@ -62,12 +65,9 @@ class MetricsAutoUpdate(ReporterPlugin):
 
     # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
     def syncGlyphMetrics(self, glyph):
-        self.log("syncGlyphMetrics")
-        self.log("syncing glyph %s" % str(glyph.name))
+        self.log("syncGlyphMetrics for %s" % str(glyph.name))
         try:
             layer = glyph.layers[Glyphs.font.selectedFontMaster.id]
-            #for layer in glyph.layers:
-            self.log("layer name %s" % str(layer.name))
             layer.syncMetrics()
 
         except Exception as e:
@@ -83,8 +83,12 @@ class MetricsAutoUpdate(ReporterPlugin):
             for glyph in Glyphs.font.glyphs:
                 self.log("Check %s linked %s (metric keys: %s, %s)?" % (glyph.name, key.name, glyph.leftMetricsKey, glyph.rightMetricsKey))
 
-                if (glyph.name is key.name):
+                if glyph.name is key.name:
                     # skip checking sidebearing keys for the glyph of same name, obviously
+                    continue
+
+                if glyph in self.glyphsWithoutMetricsKeys:
+                    self.log("Skipping %s without metrics keys" % str(glyph.name))
                     continue
 
                 # looking for a reference to the key in the glyph's metrics keys us a regular
@@ -103,7 +107,7 @@ class MetricsAutoUpdate(ReporterPlugin):
                         self.log("LSB links")
                         referencedGlyphs.append(glyph)
 
-                #RSB
+                # RSB
                 if glyph.rightMetricsKey is not None:
                     if pattern.search(glyph.rightMetricsKey) is not None or glyph.rightMetricsKey == key.name:
                         self.log("RSB links")
@@ -117,22 +121,63 @@ class MetricsAutoUpdate(ReporterPlugin):
         return referencedGlyphs
 
 
+    # Helper to check if a glyph has metric keys
+    def glyphHasMetricsKeys(self, glyph):
+        if glyph.leftMetricsKey is not None or glyph.rightMetricsKey is not None:
+            return True
+        else:
+            return False
+
+
+    # Helper function to store all glyphs that won't need to be updated because
+    # they don't have any metrics keys in their left or right sidebearings
+    def cacheAllGlyphKeys(self):
+        for glyph in Glyphs.font.glyphs:
+            if glyph.leftMetricsKey is None and glyph.rightMetricsKey is None:
+                self.glyphsWithoutMetricsKeys.append(glyph)
+
+        self.log("Cached glyphs without metrics keys")
+        self.log(self.glyphsWithoutMetricsKeys)
+        self.glyphsCached = True
+
+        return
+
+
+    # Helper to sync this glyph's metric keys with the cache
+    # If it has no metrics keys, but is not in the cache, remove it
+    # If it has metrics keys, but is in the cache, remove it
+    def cacheGlyphKeys(self, glyph):
+        self.log("cacheGlyphKeys for %s" % str(glyph.name))
+        if self.glyphHasMetricsKeys(glyph):
+            if glyph in self.glyphsWithoutMetricsKeys:
+                self.glyphsWithoutMetricsKeys.remove(glyph)
+        else: 
+            if not glyph in self.glyphsWithoutMetricsKeys:
+                self.glyphsWithoutMetricsKeys.append(glyph)
+
+
     # use the foreground drawing loop hook to check if metrics updates are required
     def foreground(self, layer):
         glyph = layer.parent
         update = False
+
+        # On the first go around cache all glyph keys
+        if self.glyphsCached is False:
+            self.cacheAllGlyphKeys()
+        else:
+            self.cacheGlyphKeys(glyph)
 
         # Only update when the current layer is a real drawing layer (master, or layer
         # in the sidebar panel) - i.e. don't react to an active  GSBackgroundLayer type
         if layer.className() != "GSLayer":
             return
 
-        # only trigger an update to other glyphs if this glyph's LSB or RSB really change
+        # Only trigger an update to other glyphs if this glyph's LSB or RSB really change
         if glyph.name != self.lastGlyph or self.lastGlyph is None:
             self.log("New active glyph %s" % str(layer.parent))
             self.lastGlyph = glyph.name
 
-            # only even make it possible to trigger an update if the glyph has
+            # Only even make it possible to trigger an update if the glyph has
             # numeric LSB or RSB, not a metrics key
             # if numeric, go ahead and check with last active value            
             if layer.LSB is not None:
