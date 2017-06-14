@@ -221,6 +221,11 @@ class MetricsAutoUpdate(GeneralPlugin):
         glyph = layer.parent
         update = False
 
+        # if there are no nodes nor components in the layer (e.g. it is empty)
+        # don't try to sync sidebearing as this will infinitely grow the sidebearings
+        if not layer.paths and not layer.components:
+            return
+
         # On the first go around cache all glyph keys
         if self.glyphsCached is False:
             self.cacheAllGlyphKeys()
