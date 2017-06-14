@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleVersion</key>
-	<string>0.0.5</string>
+	<string>0.0.6</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.0.5a</string>
+	<string>0.0.6a</string>
 	<key>UpdateFeedURL</key>
 	<string>https://raw.githubusercontent.com/underscoretype/glyphs-plugin-sync-metrics-keys/master/SyncMetricsKeys/Contents/Info.plist</string>
 	<key>productPageURL</key>

@@ -11,34 +11,63 @@
 #   (c) Johannes "kontur" Neumeier 2017
 #
 #
+#   My thanks for a plentitude of code examples borrowed from:
+#   - Georg Seifert (@schriftgestalt) https://github.com/schriftgestalt/GlyphsSDK
+#   - Rainer Erich Scheichelbauer (@mekkablue) https://github.com/mekkablue/SyncSelection
+#
+#
 ###########################################################################################################
 
 
 from GlyphsApp.plugins import *
+from GlyphsApp import DRAWFOREGROUND
 import re
 
-class MetricsAutoUpdate(ReporterPlugin):
-
+class MetricsAutoUpdate(GeneralPlugin):
 
     def settings(self):
-        # setting the visible name, displayed as "Show Sync Metrics Key"
-        # semantically, using the ReporterPlugin for this functionablity is incorrect,
-        # but it allows for easy toggling
-        self.menuName = 'Sync Metrics Keys'
+        self.name = Glyphs.localize({
+            'en': u'Sync Metrics Keys', 
+            'de': u'Metrics synchronisieren',
+            'es': u'Sincronizar metrics',
+            'fr': u'Synchroniser metrics'
+        })
+
+        NSUserDefaults.standardUserDefaults().registerDefaults_(
+            {
+                "com.underscoretype.SyncMetricsKeys.state": False
+            }
+        )
 
 
     def start(self):
-        # no logging in production version
-        self.logging = False
+        try:
+            # no logging in production version
+            self.logging = False
 
-        # variables used to determine when to trigger and update that needs to
-        # be propagated to other glyphs
-        self.lastGlyph = None
-        self.lastLSB = None
-        self.lastRSB = None
+            # variables used to determine when to trigger and update that needs to
+            # be propagated to other glyphs
+            self.lastGlyph = None
+            self.lastLSB = None
+            self.lastRSB = None
 
-        self.glyphsCached = False
-        self.cache = {}
+            self.glyphsCached = False
+            self.cache = {}
+
+            menuItem = NSMenuItem(self.name, self.toggleMenu)
+            menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
+            Glyphs.menu[GLYPH_MENU].append(menuItem)
+        
+        except Exception as e:
+            self.log("Registering menu entry did not work")
+            self.log("Exception: %s" % str(e))
+
+
+        self.log("Menu state")
+        self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
+
+        if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
+            self.addSyncCallback()
 
         self.log("Syc Metrics Keys Start")
 
@@ -47,7 +76,40 @@ class MetricsAutoUpdate(ReporterPlugin):
     def log(self, message):
         if self.logging:
             self.logToConsole(message)
+    
+
+    def toggleMenu(self, sender):
+        self.log("Toggle menu")
+        self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
+
+        if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
+            Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"] = False
+            self.removeSyncCallback()
+        else:
+            Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"] = True
+            self.addSyncCallback()
         
+        currentState = Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]
+        Glyphs.menu[GLYPH_MENU].submenu().itemWithTitle_(self.name).setState_(currentState)
+
+
+    def addSyncCallback(self):
+        self.log("Add callback")
+        try:
+            Glyphs.addCallback(self.syncMetricsKeys, DRAWFOREGROUND)
+            self.log("Registered callback")
+        except Exception as e:
+            self.log("Exception: %s" % str(e))
+    
+
+    def removeSyncCallback(self):
+        self.log("Remove callback")
+        try:
+            Glyphs.removeCallback(self.syncMetricsKeys, DRAWFOREGROUND)
+            self.log("Removed callback")
+        except Exception as e:
+            self.log("Exception: %s" % str(e))
+
 
     def updateMetrics(self, layer):
         self.log("updateMetrics")
@@ -155,7 +217,7 @@ class MetricsAutoUpdate(ReporterPlugin):
 
 
     # use the foreground drawing loop hook to check if metrics updates are required
-    def foreground(self, layer):
+    def syncMetricsKeys(self, layer, info):
         glyph = layer.parent
         update = False
 
