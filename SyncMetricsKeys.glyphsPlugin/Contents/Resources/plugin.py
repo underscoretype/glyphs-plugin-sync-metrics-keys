@@ -155,17 +155,19 @@ class MetricsAutoUpdate(GeneralPlugin):
         self.log("getGlyphMetricsKeys for %s" % str(glyph.name))
         links = []
 
-        regex = "([a-zA-Z]+)"
-        pattern = re.compile(regex)
+        # Improved key matching regex thanks to Justin Kerr Sheckler from
+        # https://github.com/jayKayEss/MetricsSolver/blob/master/
+        # MetricsSolver.glyphsPlugin/Contents/Resources/matcher.py#L5
+        pattern = re.compile(r"(\.?[A-Z]+(?:[.\-_][A-Z]+)*)", re.IGNORECASE)
 
         if glyph.leftMetricsKey is not None:
             for match in re.findall(pattern, glyph.leftMetricsKey):
-                #self.log("match in left: %s" % str(match))
+                self.log("match in left: %s" % str(match))
                 links.append(match)
 
         if glyph.rightMetricsKey is not None:
             for match in re.findall(pattern, glyph.rightMetricsKey):
-                #self.log("match in right: %s" % str(match))
+                self.log("match in right: %s" % str(match))
                 links.append(match)
 
         return links
