@@ -1,4 +1,4 @@
-# Sync Metrics Keys
+# Sync Metrics Keys (v.0.1.0)
 
 A simple Plugin for [Glyphs App](https://glyphsapp.com) to keep referenced side bearings in sync while editing glyphs. This syncs the current glyph's side bearings while moving nodes, but also updates all glyphs that have references to the current glyph in their side bearings.
 
