@@ -8,7 +8,7 @@
 #   A simple Plugin for Glyphs App to keep referenced side bearings in sync
 #   Install > View > Show Sync Metrics Keys
 #
-#   (c) Johannes "kontur" Neumeier 2017
+#   (c) Johannes "kontur" Neumeier 2017-2018
 #
 #
 #   My thanks for a plentitude of code examples borrowed from:
@@ -20,7 +20,7 @@
 
 
 from GlyphsApp.plugins import *
-from GlyphsApp import DRAWFOREGROUND
+from GlyphsApp import *
 import re
 
 class MetricsAutoUpdate(GeneralPlugin):
@@ -69,7 +69,7 @@ class MetricsAutoUpdate(GeneralPlugin):
         if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
             self.addSyncCallback()
 
-        self.log("Syc Metrics Keys Start")
+        self.log("Sync Metrics Keys Start")
 
 
     # use local debugging flag to enable or disable verbose output
