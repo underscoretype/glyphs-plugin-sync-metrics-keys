@@ -118,6 +118,10 @@ class MetricsAutoUpdate(GeneralPlugin):
         self.log("updateMetrics")
         glyph = layer.parent
 
+        # register this glyph as parsed to avoid updating it again should
+        # a glyph reference back to it
+        self.parsed.append(glyph.name)
+
         # check if the current glyph is a metrics key in other glyphs, and if so, update them
 
         # TODO note that this is not recursive; if h references n, but b references h, 
@@ -150,7 +154,7 @@ class MetricsAutoUpdate(GeneralPlugin):
         if self.queue:
             self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
 
-        self.log("Parsed %s" % ",".join(self.parsed))
+        self.log("parsed %s" % ",".join(self.parsed))
 
 
     # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
