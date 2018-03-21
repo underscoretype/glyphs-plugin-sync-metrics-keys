@@ -54,6 +54,9 @@ class MetricsAutoUpdate(GeneralPlugin):
             self.glyphsCached = False
             self.cache = {}
 
+            self.parsed = []
+            self.queue = []
+
             menuItem = NSMenuItem(self.name, self.toggleMenu)
             menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
             Glyphs.menu[GLYPH_MENU].append(menuItem)
@@ -122,6 +125,12 @@ class MetricsAutoUpdate(GeneralPlugin):
         
         if not glyph.name in self.cache:
             self.log("No links to key %s" % str(glyph.name))
+
+            # if this glyph caused no updates check the remaining queue
+            if self.queue:
+                self.log("Next in queue %s" % str (self.queue[0]))
+                self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
+
             return
 
         linkedGlyphs = self.cache[glyph.name]
@@ -130,6 +139,18 @@ class MetricsAutoUpdate(GeneralPlugin):
         if len(linkedGlyphs) > 0:
             for linkedGlyph in linkedGlyphs:
                 self.syncGlyphMetrics(linkedGlyph)
+
+                # if not yet parsed and not in the queue yet add the links to the queue
+                # checking against already parsed letters prevents infinite recursion
+                # should two glyphs' sidebearings reference each other
+                if linkedGlyph.name not in self.parsed and linkedGlyph not in self.queue:
+                    self.queue.append(linkedGlyph)
+
+        # check if there is more queued up
+        if self.queue:
+            self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
+
+        self.log("Parsed %s" % ",".join(self.parsed))
 
 
     # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
@@ -277,5 +298,9 @@ class MetricsAutoUpdate(GeneralPlugin):
             # the caching, so that potential linking / unlinking of this glyph
             # to other keys gets taken into account
             self.cacheGlyphKeys(glyph)
+
+            # reset queue and parsed register
+            self.queue = []
+            self.parsed = []
 
             self.updateMetrics(layer)
