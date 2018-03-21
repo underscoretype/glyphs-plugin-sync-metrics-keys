@@ -21,7 +21,7 @@
 
 from GlyphsApp.plugins import *
 from GlyphsApp import *
-import re
+import re, traceback
 
 class MetricsAutoUpdate(GeneralPlugin):
 
@@ -53,6 +53,7 @@ class MetricsAutoUpdate(GeneralPlugin):
 
             self.glyphsCached = False
             self.cache = {}
+            self.componentCache = {}
 
             self.parsed = []
             self.queue = []
@@ -115,46 +116,57 @@ class MetricsAutoUpdate(GeneralPlugin):
 
 
     def updateMetrics(self, layer):
-        self.log("updateMetrics")
+        self.log("updateMetrics %s" % layer.parent.name)
         glyph = layer.parent
+        try:
 
-        # register this glyph as parsed to avoid updating it again should
-        # a glyph reference back to it
-        self.parsed.append(glyph.name)
+            # register this glyph as parsed to avoid updating it again should
+            # a glyph reference back to it
+            self.parsed.append(glyph.name)
 
-        # check if the current glyph is a metrics key in other glyphs, and if so, update them
+            # see if the glyph is used as an auto-aligned component in another glyph trigger
+            # an update for that glyph and append that component to queue so other glyphs
+            # referencing the component also get updated
+            if glyph.name in self.componentCache:
+                # self.log("Glyphs referencing the current glyph as component: %s" % ",".join(glyphsReferencingAsComponent))
+                for ref in self.componentCache[glyph.name]:
+                    ref.layers[Glyphs.font.selectedFontMaster.id].syncMetrics()
 
-        # TODO note that this is not recursive; if h references n, but b references h, 
-        # editing n will not update b, because it does not reference n directly
-        
-        if not glyph.name in self.cache:
-            self.log("No links to key %s" % str(glyph.name))
+                    if ref.name not in self.parsed and ref not in self.queue:
+                        self.log("%s uses %s as component and also needs updating" % (ref.name, glyph.name))
+                        self.queue.append(ref)
 
-            # if this glyph caused no updates check the remaining queue
+            # check if the current glyph is a metrics key in other glyphs, and if so, update them
+            if not glyph.name in self.cache:
+                self.log("No links to key %s" % str(glyph.name))
+
+                # if this glyph caused no updates check the remaining queue
+                if self.queue:
+                    self.log("Next in queue %s" % str (self.queue[0]))
+                    self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
+
+                return
+
+            linkedGlyphs = self.cache[glyph.name]
+            self.log("LinkedGlyphs from cache")
+            self.log(linkedGlyphs)
+            if len(linkedGlyphs) > 0:
+                for linkedGlyph in linkedGlyphs:
+                    self.syncGlyphMetrics(linkedGlyph)
+
+                    # if not yet parsed and not in the queue yet add the links to the queue
+                    # checking against already parsed letters prevents infinite recursion
+                    # should two glyphs' sidebearings reference each other
+                    if linkedGlyph.name not in self.parsed and linkedGlyph not in self.queue:
+                        self.queue.append(linkedGlyph)
+
+            # check if there is more queued up
             if self.queue:
-                self.log("Next in queue %s" % str (self.queue[0]))
                 self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
 
-            return
-
-        linkedGlyphs = self.cache[glyph.name]
-        self.log("LinkedGlyphs from cache")
-        self.log(linkedGlyphs)
-        if len(linkedGlyphs) > 0:
-            for linkedGlyph in linkedGlyphs:
-                self.syncGlyphMetrics(linkedGlyph)
-
-                # if not yet parsed and not in the queue yet add the links to the queue
-                # checking against already parsed letters prevents infinite recursion
-                # should two glyphs' sidebearings reference each other
-                if linkedGlyph.name not in self.parsed and linkedGlyph not in self.queue:
-                    self.queue.append(linkedGlyph)
-
-        # check if there is more queued up
-        if self.queue:
-            self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
-
-        self.log("parsed %s" % ",".join(self.parsed))
+            self.log("parsed %s" % ",".join(self.parsed))
+        except:
+            self.log(traceback.format_exc())
 
 
     # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
@@ -198,6 +210,24 @@ class MetricsAutoUpdate(GeneralPlugin):
         return links
 
 
+    # helper to find all glyphs (of this selected master) that have a component (name)
+    def getGlyphsWithComponent(self, glyphName, withEnabledAlignment = True):
+        glyphs = []
+        font = Glyphs.font
+        for glyph in font.glyphs:
+            layer = glyph.layers[font.selectedFontMaster.id]
+            if layer.components:
+                for component in layer.components:
+                    if component.componentName == glyphName:
+                        if withEnabledAlignment:
+                            if component.automaticAlignment:
+                                glyphs.append(glyph)
+                        else:
+                            glyphs.append(glyph)
+                                
+        return list(set(glyphs))
+
+
     # Helper function to store all glyphs that won't need to be updated because
     # they don't have any metrics keys in their left or right sidebearings
     def cacheAllGlyphKeys(self):
@@ -233,13 +263,30 @@ class MetricsAutoUpdate(GeneralPlugin):
                         self.cache[link].append(glyph)
 
 
+    def cacheComponents(self):
+        self.log("cacheComponents")
+        self.componentCache = {}
+        try:
+            for glyph in Glyphs.font.glyphs:
+                for layer in glyph.layers:
+                    if layer.components:
+                        for component in layer.components:
+                            if component.automaticAlignment:
+                                if component.componentName not in self.componentCache:
+                                    self.componentCache[component.componentName] = []
+
+                                if glyph not in self.componentCache[component.componentName]:
+                                    self.componentCache[component.componentName].append(glyph)
+        except:
+            self.log(traceback.print_exc())
+
+
     def purgeLinkFromCache(self, glyph):
         self.log("purge %s from cache links" % str(glyph.name))
-        self.log(self.cache)
         for key, links in self.cache.iteritems():
             for link in links:
                 if link == glyph:
-                    self.log("remove link for %s fro key %s" % (str(glyph.name), str(key)))
+                    self.log("remove link for %s from key %s" % (str(glyph.name), str(key)))
                     links.remove(glyph)
 
 
@@ -274,7 +321,7 @@ class MetricsAutoUpdate(GeneralPlugin):
                 if self.lastLSB != layer.LSB:
                     if glyph.leftMetricsKey is None:
                         self.lastLSB = layer.LSB
-                        update = True
+                        # update = True
                     else:
                         # not an update to other glyphs, but refresh this glyphs
                         # references metrics key value
@@ -284,7 +331,7 @@ class MetricsAutoUpdate(GeneralPlugin):
                 if self.lastRSB != layer.RSB:
                     if glyph.rightMetricsKey is None:
                         self.lastRSB = layer.RSB
-                        update = True
+                        # update = True
                     else:
                         # not an update to other glyphs, but refresh this glyphs
                         # references metrics key value
@@ -302,6 +349,7 @@ class MetricsAutoUpdate(GeneralPlugin):
             # the caching, so that potential linking / unlinking of this glyph
             # to other keys gets taken into account
             self.cacheGlyphKeys(glyph)
+            self.cacheComponents()
 
             # reset queue and parsed register
             self.queue = []
