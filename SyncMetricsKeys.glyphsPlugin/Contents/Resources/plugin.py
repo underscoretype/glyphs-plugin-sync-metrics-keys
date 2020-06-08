@@ -1,4 +1,5 @@
 # encoding: utf-8
+from __future__ import division, print_function, unicode_literals
 
 ###########################################################################################################
 #
@@ -21,16 +22,17 @@
 
 from GlyphsApp.plugins import *
 from GlyphsApp import *
-import re
+import re, objc
 
 class MetricsAutoUpdate(GeneralPlugin):
 
+    @objc.python_method
     def settings(self):
         self.name = Glyphs.localize({
-            'en': u'Sync Metrics Keys', 
-            'de': u'Metrics synchronisieren',
-            'es': u'Sincronizar metrics',
-            'fr': u'Synchroniser metrics'
+            'en': 'Sync Metrics Keys', 
+            'de': 'Metrics synchronisieren',
+            'es': 'Sincronizar metrics',
+            'fr': 'Synchroniser metrics'
         })
 
         NSUserDefaults.standardUserDefaults().registerDefaults_(
@@ -39,29 +41,24 @@ class MetricsAutoUpdate(GeneralPlugin):
             }
         )
 
-
+    @objc.python_method
     def start(self):
-        try:
-            # no logging in production version
-            self.logging = False
 
-            # variables used to determine when to trigger and update that needs to
-            # be propagated to other glyphs
-            self.lastGlyph = None
-            self.lastLSB = None
-            self.lastRSB = None
+        # no logging in production version
+        self.logging = False
 
-            self.glyphsCached = False
-            self.cache = {}
+        # variables used to determine when to trigger and update that needs to
+        # be propagated to other glyphs
+        self.lastGlyph = None
+        self.lastLSB = None
+        self.lastRSB = None
 
-            menuItem = NSMenuItem(self.name, self.toggleMenu)
-            menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
-            Glyphs.menu[GLYPH_MENU].append(menuItem)
-        
-        except Exception as e:
-            self.log("Registering menu entry did not work")
-            self.log("Exception: %s" % str(e))
+        self.glyphsCached = False
+        self.cache = {}
 
+        menuItem = NSMenuItem(self.name, self.toggleMenu_)
+        menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
+        Glyphs.menu[GLYPH_MENU].append(menuItem)
 
         self.log("Menu state")
         self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
@@ -73,12 +70,13 @@ class MetricsAutoUpdate(GeneralPlugin):
 
 
     # use local debugging flag to enable or disable verbose output
+    @objc.python_method
     def log(self, message):
         if self.logging:
             self.logToConsole(message)
     
 
-    def toggleMenu(self, sender):
+    def toggleMenu_(self, sender):
         self.log("Toggle menu")
         self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
 
@@ -110,7 +108,7 @@ class MetricsAutoUpdate(GeneralPlugin):
         except Exception as e:
             self.log("Exception: %s" % str(e))
 
-
+    @objc.python_method
     def updateMetrics(self, layer):
         self.log("updateMetrics")
         glyph = layer.parent
@@ -133,6 +131,7 @@ class MetricsAutoUpdate(GeneralPlugin):
 
 
     # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
+    @objc.python_method
     def syncGlyphMetrics(self, glyph):
         self.log("syncGlyphMetrics for %s" % str(glyph.name))
         try:
@@ -144,13 +143,14 @@ class MetricsAutoUpdate(GeneralPlugin):
 
 
     # Helper to check if a glyph has metric keys
+    @objc.python_method
     def glyphHasMetricsKeys(self, glyph):
         if glyph.leftMetricsKey is not None or glyph.rightMetricsKey is not None:
             return True
         else:
             return False
 
-
+    @objc.python_method
     def getGlyphMetricsKeys(self, glyph):
         self.log("getGlyphMetricsKeys for %s" % str(glyph.name))
         links = []
@@ -175,6 +175,7 @@ class MetricsAutoUpdate(GeneralPlugin):
 
     # Helper function to store all glyphs that won't need to be updated because
     # they don't have any metrics keys in their left or right sidebearings
+    @objc.python_method
     def cacheAllGlyphKeys(self):
         for glyph in Glyphs.font.glyphs:
             self.cacheGlyphKeys(glyph)
@@ -183,7 +184,7 @@ class MetricsAutoUpdate(GeneralPlugin):
 
         return
 
-
+    @objc.python_method
     def cacheGlyphKeys(self, glyph):
         # as part of caching this glyph and it's links, first remove it
         # from any existing keys it might be linked in
@@ -207,11 +208,11 @@ class MetricsAutoUpdate(GeneralPlugin):
                     if glyph not in self.cache[link]:
                         self.cache[link].append(glyph)
 
-
+    @objc.python_method
     def purgeLinkFromCache(self, glyph):
         self.log("purge %s from cache links" % str(glyph.name))
         self.log(self.cache)
-        for key, links in self.cache.iteritems():
+        for key, links in self.cache.items():
             for link in links:
                 if link == glyph:
                     self.log("remove link for %s fro key %s" % (str(glyph.name), str(key)))
@@ -219,6 +220,7 @@ class MetricsAutoUpdate(GeneralPlugin):
 
 
     # use the foreground drawing loop hook to check if metrics updates are required
+    @objc.python_method
     def syncMetricsKeys(self, layer, info):
         glyph = layer.parent
         update = False
