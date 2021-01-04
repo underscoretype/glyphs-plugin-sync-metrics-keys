@@ -1,7 +1,7 @@
 # encoding: utf-8
 from __future__ import division, print_function, unicode_literals
 
-###########################################################################################################
+###############################################################################
 #
 #
 #	Sync Metrics Keys
@@ -9,7 +9,7 @@ from __future__ import division, print_function, unicode_literals
 #   A simple Plugin for Glyphs App to keep referenced side bearings in sync
 #   Install > View > Show Sync Metrics Keys
 #
-#   (c) Johannes "kontur" Neumeier 2017-2018
+#   (c) Johannes "kontur" Neumeier 2017-2021
 #
 #
 #   My thanks for a plentitude of code examples borrowed from:
@@ -26,339 +26,175 @@ import re, objc
 
 class MetricsAutoUpdate(GeneralPlugin):
 
-    @objc.python_method
-    def settings(self):
-        self.name = Glyphs.localize({
-            'en': 'Sync Metrics Keys', 
-            'de': 'Metrics synchronisieren',
-            'es': 'Sincronizar metrics',
-            'fr': 'Synchroniser metrics'
-        })
+	@objc.python_method
+	def settings(self):
+		self.name = Glyphs.localize({
+			'en': 'Sync Metrics Keys', 
+			'de': 'Metrics synchronisieren',
+			'es': 'Sincronizar metrics',
+			'fr': 'Synchroniser metrics'
+		})
 
-        NSUserDefaults.standardUserDefaults().registerDefaults_(
-            {
-                "com.underscoretype.SyncMetricsKeys.state": False
-            }
-        )
+		NSUserDefaults.standardUserDefaults().registerDefaults_(
+			{
+				"com.underscoretype.SyncMetricsKeys.state": False
+			}
+		)
 
-    @objc.python_method
-    def start(self):
+	@objc.python_method
+	def start(self):
 
-        # no logging in production version
-        self.logging = False
+		self.logging = True
 
-        # variables used to determine when to trigger and update that needs to
-        # be propagated to other glyphs
-        self.lastGlyph = None
-        self.lastLSB = None
-        self.lastRSB = None
+		# Values to keep track of
+		self.currentLayer = False
+		self.currentLSB = False
+		self.currentRSB = False
+		self.currentTSB = False
+		self.currentBSB = False
+		self.currentWidth = False
+		self.currentVertWidth = False
 
-        self.glyphsCached = False
-        self.cache = {}
+		self.isMouseDown = False
 
-        menuItem = NSMenuItem(self.name, self.toggleMenu_)
-        menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
-        Glyphs.menu[GLYPH_MENU].append(menuItem)
+		menuItem = NSMenuItem(self.name, self.toggleMenu_)
+		menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
+		Glyphs.menu[GLYPH_MENU].append(menuItem)
 
-        self.log("Menu state")
-        self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
+		self.log("Menu state")
+		self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
 
-        if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
-            self.addSyncCallback()
+		if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
+			self.addCallbacks()
 
-        self.log("Sync Metrics Keys Start")
-
-
-    # use local debugging flag to enable or disable verbose output
-    @objc.python_method
-    def log(self, message):
-        if self.logging:
-            self.logToConsole(message)
-    
-
-    @objc.python_method
-    def toggleMenu_(self, sender):
-        self.log("Toggle menu")
-        self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
-
-        if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
-            Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"] = False
-            self.removeSyncCallback()
-        else:
-            Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"] = True
-            self.addSyncCallback()
-        
-        currentState = Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]
-        Glyphs.menu[GLYPH_MENU].submenu().itemWithTitle_(self.name).setState_(currentState)
+		self.log("Sync Metrics Keys Start")
 
 
-    @objc.python_method
-    def addSyncCallback(self):
-        self.log("Add callback")
-        try:
-            Glyphs.addCallback(self.syncMetricsKeys, DRAWFOREGROUND)
-            self.log("Registered callback")
-        except Exception as e:
-            self.log("Exception: %s" % str(e))
-    
-
-    @objc.python_method
-    def removeSyncCallback(self):
-        self.log("Remove callback")
-        try:
-            Glyphs.removeCallback(self.syncMetricsKeys, DRAWFOREGROUND)
-            self.log("Removed callback")
-        except Exception as e:
-            self.log("Exception: %s" % str(e))
-
-    @objc.python_method
-    def updateMetrics(self, layer):
-        self.log("updateMetrics %s" % layer.parent.name)
-        glyph = layer.parent
-        try:
-
-            # register this glyph as parsed to avoid updating it again should
-            # a glyph reference back to it
-            self.parsed.append(glyph.name)
-
-            # see if the glyph is used as an auto-aligned component in another glyph trigger
-            # an update for that glyph and append that component to queue so other glyphs
-            # referencing the component also get updated
-            if glyph.name in self.componentCache:
-                # self.log("Glyphs referencing the current glyph as component: %s" % ",".join(glyphsReferencingAsComponent))
-                for ref in self.componentCache[glyph.name]:
-                    ref.layers[Glyphs.font.selectedFontMaster.id].syncMetrics()
-
-                    if ref.name not in self.parsed and ref not in self.queue:
-                        self.log("%s uses %s as component and also needs updating" % (ref.name, glyph.name))
-                        self.queue.append(ref)
-
-            # check if the current glyph is a metrics key in other glyphs, and if so, update them
-            if not glyph.name in self.cache:
-                self.log("No links to key %s" % str(glyph.name))
-
-                # if this glyph caused no updates check the remaining queue
-                if self.queue:
-                    self.log("Next in queue %s" % str (self.queue[0]))
-                    self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
-
-                return
-
-            linkedGlyphs = self.cache[glyph.name]
-            self.log("LinkedGlyphs from cache")
-            self.log(linkedGlyphs)
-            if len(linkedGlyphs) > 0:
-                for linkedGlyph in linkedGlyphs:
-                    self.syncGlyphMetrics(linkedGlyph)
-
-                    # if not yet parsed and not in the queue yet add the links to the queue
-                    # checking against already parsed letters prevents infinite recursion
-                    # should two glyphs' sidebearings reference each other
-                    if linkedGlyph.name not in self.parsed and linkedGlyph not in self.queue:
-                        self.queue.append(linkedGlyph)
-
-            # check if there is more queued up
-            if self.queue:
-                self.updateMetrics(self.queue.pop().layers[Glyphs.font.selectedFontMaster.id])
-
-            self.log("parsed %s" % ",".join(self.parsed))
-        except:
-            self.log(traceback.format_exc())
+	# use local debugging flag to enable or disable verbose output
+	@objc.python_method
+	def log(self, message):
+		if self.logging:
+			self.logToConsole(message)
 
 
-    # shortcut for syncing the metrics in THE ACTIVE MASTER's layers in a glyph
-    @objc.python_method
-    def syncGlyphMetrics(self, glyph):
-        self.log("syncGlyphMetrics for %s" % str(glyph.name))
-        try:
-            layer = glyph.layers[Glyphs.font.selectedFontMaster.id]
-            layer.syncMetrics()
+	@objc.python_method
+	def toggleMenu_(self, sender):
+		self.log("Toggle menu")
+		self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
 
-        except Exception as e:
-            self.log("Error: %s" % str(e))
+		if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
+			Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"] = False
+			self.removeCallbacks()
+		else:
+			Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"] = True
+			self.addCallbacks()
 
-
-    # Helper to check if a glyph has metric keys
-    @objc.python_method
-    def glyphHasMetricsKeys(self, glyph):
-        if glyph.leftMetricsKey is not None or glyph.rightMetricsKey is not None:
-            return True
-        else:
-            return False
-
-    @objc.python_method
-    def getGlyphMetricsKeys(self, glyph):
-        self.log("getGlyphMetricsKeys for %s" % str(glyph.name))
-        links = []
-
-        # Improved key matching regex thanks to Justin Kerr Sheckler from
-        # https://github.com/jayKayEss/MetricsSolver/blob/master/
-        # MetricsSolver.glyphsPlugin/Contents/Resources/matcher.py#L5
-        pattern = re.compile(r"(\.?[A-Z]+(?:[.\-_][A-Z]+)*)", re.IGNORECASE)
-
-        if glyph.leftMetricsKey is not None:
-            for match in re.findall(pattern, glyph.leftMetricsKey):
-                self.log("match in left: %s" % str(match))
-                links.append(match)
-
-        if glyph.rightMetricsKey is not None:
-            for match in re.findall(pattern, glyph.rightMetricsKey):
-                self.log("match in right: %s" % str(match))
-                links.append(match)
-
-        return links
+		currentState = Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]
+		Glyphs.menu[GLYPH_MENU].submenu().itemWithTitle_(self.name).setState_(currentState)
 
 
-    # helper to find all glyphs (of this selected master) that have a component (name)
+	@objc.python_method
+	def addCallbacks(self):
+		self.log("Add callback")
+		try:
+			Glyphs.addCallback(self.syncMetricsKeys, DRAWFOREGROUND)
+			self.log("Registered sync callback")
 
-    @objc.python_method
-    def getGlyphsWithComponent(self, glyphName, withEnabledAlignment = True):
-        glyphs = []
-        font = Glyphs.font
-        for glyph in font.glyphs:
-            layer = glyph.layers[font.selectedFontMaster.id]
-            if layer.components:
-                for component in layer.components:
-                    if component.componentName == glyphName:
-                        if withEnabledAlignment:
-                            if component.automaticAlignment:
-                                glyphs.append(glyph)
-                        else:
-                            glyphs.append(glyph)
-                                
-        return list(set(glyphs))
+			Glyphs.addCallback(self.mouseUp, MOUSEUP)
+			self.log("Registered mouse up callback")
+
+			Glyphs.addCallback(self.mouseDown, MOUSEDOWN)
+			self.log("Registered mouse down callback")
+		except Exception as e:
+			self.log("Exception: %s" % str(e))
 
 
-    # Helper function to store all glyphs that won't need to be updated because
-    # they don't have any metrics keys in their left or right sidebearings
-    @objc.python_method
-    def cacheAllGlyphKeys(self):
-        for glyph in Glyphs.font.glyphs:
-            self.cacheGlyphKeys(glyph)
+	@objc.python_method
+	def removeCallbacks(self):
+		self.log("Remove callback")
+		try:
+			Glyphs.removeCallback(self.syncMetricsKeys, DRAWFOREGROUND)
+			self.log("Removed sync callback")
 
-        self.glyphsCached = True
+			Glyphs.removeCallback(self.mouseUp, MOUSEUP)
+			self.log("Removed mouse up callback")
 
-        return
-
-    @objc.python_method
-    def cacheGlyphKeys(self, glyph):
-        # as part of caching this glyph and it's links, first remove it
-        # from any existing keys it might be linked in
-        self.purgeLinkFromCache(glyph)
-
-        # if this glyph has metrics keys, they need to be cached to the 
-        # appropiate keys
-        if not glyph.leftMetricsKey is None or not glyph.rightMetricsKey is None:
-            # if a glyph has metrics links, iterate them and make sure any
-            # referenced keys will trigger an update for this glyph when they
-            # get changed
-            links = self.getGlyphMetricsKeys(glyph)
-            if len(links) > 0:
-                for link in links:
-                    # if the key does not exist in the cache, create it first
-                    if link not in self.cache:
-                        self.cache[link] = []
-
-                    # then add this glyph to be updated when the key-glyph 
-                    # changes   
-                    if glyph not in self.cache[link]:
-                        self.cache[link].append(glyph)
+			Glyphs.removeCallback(self.mouseDown, MOUSEDOWN)
+			self.log("Removed mouse down callback")
+		except Exception as e:
+			self.log("Exception: %s" % str(e))
 
 
-    @objc.python_method
-    def cacheComponents(self):
-        self.log("cacheComponents")
-        self.componentCache = {}
-        try:
-            for glyph in Glyphs.font.glyphs:
-                for layer in glyph.layers:
-                    if layer.components:
-                        for component in layer.components:
-                            if component.automaticAlignment:
-                                if component.componentName not in self.componentCache:
-                                    self.componentCache[component.componentName] = []
-
-                                if glyph not in self.componentCache[component.componentName]:
-                                    self.componentCache[component.componentName].append(glyph)
-        except:
-            self.log(traceback.print_exc())
+	@objc.python_method
+	def mouseUp(self, info):
+		self.isMouseDown = False
 
 
-    @objc.python_method
-    def purgeLinkFromCache(self, glyph):
-        self.log("purge %s from cache links" % str(glyph.name))
-        self.log(self.cache)
-        for key, links in self.cache.items():
-            for link in links:
-                if link == glyph:
-                    self.log("remove link for %s from key %s" % (str(glyph.name), str(key)))
-                    links.remove(glyph)
+	@objc.python_method
+	def mouseDown(self, info):
+		self.isMouseDown = True
 
 
-    # use the foreground drawing loop hook to check if metrics updates are required
-    @objc.python_method
-    def syncMetricsKeys(self, layer, info):
-        glyph = layer.parent
-        update = False
+	# use the foreground drawing loop hook to check if metrics updates are required
+	@objc.python_method
+	def syncMetricsKeys(self, layer, info):
 
-        # if there are no nodes nor components in the layer (e.g. it is empty)
-        # don't try to sync sidebearing as this will infinitely grow the sidebearings
-        if not layer.paths and not layer.components:
-            return
+		# While the mouse is being held down we do not sync, so that dragging
+		# paths beyond the sidebearing does not constantly retrigger (which
+		# makes drawing hard)
+		if self.isMouseDown:
+			return
 
-        # On the first go around cache all glyph keys
-        if self.glyphsCached is False:
-            self.cacheAllGlyphKeys()
+		# If the layer was switched, set new current values to check against
+		if layer != self.currentLayer:
+			self.log("New active layer")
 
-        # Only update when the current layer is a real drawing layer (master, or layer
-        # in the sidebar panel) - i.e. don't react to an active GSBackgroundLayer type
-        if layer.className() != "GSLayer":
-            return
+			# For a start, sync
+			layer.syncMetrics()
 
-        # Only trigger an update to other glyphs if this glyph's LSB or RSB really change
-        if glyph.name != self.lastGlyph or self.lastGlyph is None:
-            self.log("New active glyph %s" % str(layer.parent))
-            self.lastGlyph = glyph.name
+			# Reset this, to be sure it was not somehow left "pressed", which
+			# would block all future sync
+			self.isMouseDown = False
 
-            # Only even make it possible to trigger an update if the glyph has
-            # numeric LSB or RSB, not a metrics key
-            # if numeric, go ahead and check with last active value            
-            if layer.LSB is not None:
-                if self.lastLSB != layer.LSB:
-                    if glyph.leftMetricsKey is None:
-                        self.lastLSB = layer.LSB
-                        # update = True
-                    else:
-                        # not an update to other glyphs, but refresh this glyphs
-                        # references metrics key value
-                        layer.syncMetrics()
+			self.currentLayer = layer
+			self.currentLSB = layer.LSB
+			self.currentRSB = layer.RSB
+			self.currentTSB = layer.TSB
+			self.currentBSB = layer.BSB
+			self.currentWidth = layer.width
+			self.currentVertWidth = layer.vertWidth
 
-            if layer.RSB is not None: 
-                if self.lastRSB != layer.RSB:
-                    if glyph.rightMetricsKey is None:
-                        self.lastRSB = layer.RSB
-                        # update = True
-                    else:
-                        # not an update to other glyphs, but refresh this glyphs
-                        # references metrics key value
-                        layer.syncMetrics()
-        else:
-            if (self.lastLSB != layer.LSB) or (self.lastRSB != layer.RSB):
-                self.log("Same glyph, changed metrics")
-                self.lastLSB = layer.LSB
-                self.lastRSB = layer.RSB
-                layer.syncMetrics()
-                update = True
+			# Sync all other glyphs, in case the initial syncing of this layer
+			# changed things
+			self.syncAll()
 
-        if update:
-            # before propagating an update to other linked glyphs update 
-            # the caching, so that potential linking / unlinking of this glyph
-            # to other keys gets taken into account
-            self.cacheGlyphKeys(glyph)
-            self.cacheComponents()
+		# Do not sync when there is no geometry, as this will just infinitely
+		# grow the width of the glyph!
+		if not layer.paths and not layer.components:
+			self.log("Glyph has no geometry, skip syncing")
+			return
 
-            # reset queue and parsed register
-            self.queue = []
-            self.parsed = []
+		if self.currentLSB != layer.LSB or self.currentRSB != layer.RSB or \
+			self.currentWidth != layer.width or \
+			self.currentTSB != layer.TSB or self.currentBSB != layer.BSB or \
+			self.currentVertWidth != layer.vertWidth:
 
-            self.updateMetrics(layer)
+			self.log("Sync metrics changes")
+
+			# Update the values for comparison
+			self.currentLSB = layer.LSB
+			self.currentRSB = layer.RSB
+			self.currentTSB = layer.TSB
+			self.currentBSB = layer.BSB
+			self.currentWidth = layer.width
+			self.currentVertWidth = layer.vertWidth
+
+			self.syncAll()
+
+	@objc.python_method
+	def syncAll(self):
+		for g in Glyphs.font.glyphs:
+			for l in g.layers:
+				if l.metricsKeysOutOfSync() == 1:
+					self.log("Layer was out of sync, update linked metrics %s" % str(l))
+					l.syncMetrics()
