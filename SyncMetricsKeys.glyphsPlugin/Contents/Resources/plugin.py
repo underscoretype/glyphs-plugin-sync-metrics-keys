@@ -105,6 +105,12 @@ class MetricsAutoUpdate(GeneralPlugin):
 
             Glyphs.addCallback(self.mouseDown, MOUSEDOWN)
             self.log("Registered mouse down callback")
+
+            Glyphs.addCallback(self.mouseUp, KEYUP)
+            self.log("Registered mouse up callback")
+
+            Glyphs.addCallback(self.mouseDown, KEYDOWN)
+            self.log("Registered mouse down callback")
         except Exception as e:
             self.log("Exception: %s" % str(e))
 
@@ -190,6 +196,8 @@ class MetricsAutoUpdate(GeneralPlugin):
             self.currentWidth = layer.width
             self.currentVertWidth = layer.vertWidth
 
+            self.log("Active layer sidebearings: %s | %s" % (str(layer.LSB), str(layer.RSB)))
+
             self.syncAll()
 
     @objc.python_method
@@ -200,6 +208,12 @@ class MetricsAutoUpdate(GeneralPlugin):
     def syncAll(self):
         for g in Glyphs.font.glyphs:
             for l in g.layers:
-                if l.metricsKeysOutOfSync() == 1 and self.layerHasContent(layer):
+                l.beginChanges()
+                if l.metricsKeysOutOfSync() == 1 and self.layerHasContent(l):
                     self.log("Layer was out of sync, update linked metrics %s" % str(l))
                     l.syncMetrics()
+                    self.log("Updated layer metrics of %s to %s | %s" % (str(l), str(l.LSB), str(l.RSB)))
+                l.endChanges()
+        Glyphs.redraw()
+        self.log("REDRAW")
+
