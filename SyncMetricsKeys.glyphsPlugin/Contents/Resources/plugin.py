@@ -200,6 +200,6 @@ class MetricsAutoUpdate(GeneralPlugin):
     def syncAll(self):
         for g in Glyphs.font.glyphs:
             for l in g.layers:
-                if l.metricsKeysOutOfSync() == 1 and self.layerHasContent(layer):
+                if l.metricsKeysOutOfSync() == 1 and self.layerHasContent(l):
                     self.log("Layer was out of sync, update linked metrics %s" % str(l))
                     l.syncMetrics()

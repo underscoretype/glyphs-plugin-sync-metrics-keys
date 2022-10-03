@@ -1,10 +1,13 @@
-# Sync Metrics Keys (v 0.2.1)
+# Sync Metrics Keys (v 0.2.2)
 
-A simple Plugin for [Glyphs APp](https://glyphsapp.com) to always keep referenced side bearings in sync while editing glyphs. This syncs the current glyph's side bearings while moving paths or components, but also updates all glyphs that have references to the current glyph in their side bearings. It's an "always on" for "Glyph > Update Metrics".
+A simple Plugin for [Glyphs APP](https://glyphsapp.com) to always keep referenced side bearings in sync while editing glyphs. This syncs the current glyph's side bearings while moving paths or components, but also updates all glyphs that have references to the current glyph in their side bearings. It's an "always on" for "Glyph > Update Metrics".
 
 Install, then in the menu bar activate under: Glyph > Sync Metrics Keys
 
 ## Changelog
+
+### v 0.2.2
+- Fix code mistake resulting in undefined reference
 
 ### v 0.2.1
 - Prevent empty layers from syncing, which would grow their width infinitely
