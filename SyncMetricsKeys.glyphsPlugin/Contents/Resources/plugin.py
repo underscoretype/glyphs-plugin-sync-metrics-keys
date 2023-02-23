@@ -35,11 +35,6 @@ class MetricsAutoUpdate(GeneralPlugin):
             'fr': 'Synchroniser metrics'
         })
 
-        NSUserDefaults.standardUserDefaults().registerDefaults_(
-            {
-                "com.underscoretype.SyncMetricsKeys.state": False
-            }
-        )
 
     @objc.python_method
     def start(self):
@@ -64,7 +59,7 @@ class MetricsAutoUpdate(GeneralPlugin):
         self.log("Menu state")
         self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
 
-        if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
+        if Glyphs.boolDefaults["com.underscoretype.SyncMetricsKeys.state"]:
             self.addCallbacks()
 
         self.log("Sync Metrics Keys Start")
