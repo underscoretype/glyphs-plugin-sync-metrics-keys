@@ -100,12 +100,6 @@ class MetricsAutoUpdate(GeneralPlugin):
 
             Glyphs.addCallback(self.mouseDown, MOUSEDOWN)
             self.log("Registered mouse down callback")
-
-            Glyphs.addCallback(self.mouseUp, KEYUP)
-            self.log("Registered mouse up callback")
-
-            Glyphs.addCallback(self.mouseDown, KEYDOWN)
-            self.log("Registered mouse down callback")
         except Exception as e:
             self.log("Exception: %s" % str(e))
 
