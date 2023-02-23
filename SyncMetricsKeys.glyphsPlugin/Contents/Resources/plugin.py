@@ -140,6 +140,9 @@ class MetricsAutoUpdate(GeneralPlugin):
         if self.isMouseDown:
             return
 
+        if layer.hasAlignedWidth():
+            return
+
         # If the layer was switched, set new current values to check against
         if layer != self.currentLayer:
             self.log("New active layer")
