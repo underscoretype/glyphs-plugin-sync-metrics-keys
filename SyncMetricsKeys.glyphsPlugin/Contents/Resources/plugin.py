@@ -203,6 +203,5 @@ class MetricsAutoUpdate(GeneralPlugin):
                     l.syncMetrics()
                     self.log("Updated layer metrics of %s to %s | %s" % (str(l), str(l.LSB), str(l.RSB)))
                 l.endChanges()
-        Glyphs.redraw()
         self.log("REDRAW")
 
