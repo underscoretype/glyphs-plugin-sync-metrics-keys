@@ -13,9 +13,9 @@
 	<key>CFBundleName</key>
 	<string>Sync Metrics Keys</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.2</string>
+	<string>0.3</string>
 	<key>CFBundleVersion</key>
-	<string>4</string>
+	<string>5</string>
 	<key>UpdateFeedURL</key>
 	<string>https://raw.githubusercontent.com/underscoretype/glyphs-plugin-sync-metrics-keys/master/SyncMetricsKeys/Contents/Info.plist</string>
 	<key>productPageURL</key>

@@ -35,11 +35,6 @@ class MetricsAutoUpdate(GeneralPlugin):
             'fr': 'Synchroniser metrics'
         })
 
-        NSUserDefaults.standardUserDefaults().registerDefaults_(
-            {
-                "com.underscoretype.SyncMetricsKeys.state": False
-            }
-        )
 
     @objc.python_method
     def start(self):
@@ -64,7 +59,7 @@ class MetricsAutoUpdate(GeneralPlugin):
         self.log("Menu state")
         self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
 
-        if Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]:
+        if Glyphs.boolDefaults["com.underscoretype.SyncMetricsKeys.state"]:
             self.addCallbacks()
 
         self.log("Sync Metrics Keys Start")
@@ -105,12 +100,6 @@ class MetricsAutoUpdate(GeneralPlugin):
 
             Glyphs.addCallback(self.mouseDown, MOUSEDOWN)
             self.log("Registered mouse down callback")
-
-            Glyphs.addCallback(self.mouseUp, KEYUP)
-            self.log("Registered mouse up callback")
-
-            Glyphs.addCallback(self.mouseDown, KEYDOWN)
-            self.log("Registered mouse down callback")
         except Exception as e:
             self.log("Exception: %s" % str(e))
 
@@ -149,6 +138,9 @@ class MetricsAutoUpdate(GeneralPlugin):
         # paths beyond the sidebearing does not constantly retrigger (which
         # makes drawing hard)
         if self.isMouseDown:
+            return
+
+        if layer.hasAlignedWidth():
             return
 
         # If the layer was switched, set new current values to check against
@@ -214,6 +206,5 @@ class MetricsAutoUpdate(GeneralPlugin):
                     l.syncMetrics()
                     self.log("Updated layer metrics of %s to %s | %s" % (str(l), str(l.LSB), str(l.RSB)))
                 l.endChanges()
-        Glyphs.redraw()
         self.log("REDRAW")
 
