@@ -20,21 +20,22 @@ from __future__ import division, print_function, unicode_literals
 ###########################################################################################################
 
 
-from GlyphsApp.plugins import *
-from GlyphsApp import *
-import re, objc
+from GlyphsApp.plugins import GeneralPlugin
+from GlyphsApp import Glyphs, GLYPH_MENU, DRAWFOREGROUND, MOUSEDOWN, MOUSEUP
+import objc
+from Cocoa import NSMenuItem
+
 
 class MetricsAutoUpdate(GeneralPlugin):
 
     @objc.python_method
     def settings(self):
         self.name = Glyphs.localize({
-            'en': 'Sync Metrics Keys', 
+            'en': 'Sync Metrics Keys',
             'de': 'Metrics synchronisieren',
             'es': 'Sincronizar metrics',
             'fr': 'Synchroniser metrics'
         })
-
 
     @objc.python_method
     def start(self):
@@ -51,8 +52,11 @@ class MetricsAutoUpdate(GeneralPlugin):
         self.currentVertWidth = False
 
         self.isMouseDown = False
-
-        menuItem = NSMenuItem(self.name, self.toggleMenu_)
+        if Glyphs.versionNumber >= 3.3:
+            from GlyphsApp.UI import MenuItem
+            menuItem = MenuItem(self.name, action=self.toggleMenu_, target=self)
+        else:
+            menuItem = NSMenuItem(self.name, self.toggleMenu_)
         menuItem.setState_(bool(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]))
         Glyphs.menu[GLYPH_MENU].append(menuItem)
 
@@ -64,13 +68,11 @@ class MetricsAutoUpdate(GeneralPlugin):
 
         self.log("Sync Metrics Keys Start")
 
-
     # use local debugging flag to enable or disable verbose output
     @objc.python_method
     def log(self, message):
         if self.logging:
             self.logToConsole(message)
-
 
     @objc.python_method
     def toggleMenu_(self, sender):
@@ -87,7 +89,6 @@ class MetricsAutoUpdate(GeneralPlugin):
         currentState = Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"]
         Glyphs.menu[GLYPH_MENU].submenu().itemWithTitle_(self.name).setState_(currentState)
 
-
     @objc.python_method
     def addCallbacks(self):
         self.log("Add callback")
@@ -102,7 +103,6 @@ class MetricsAutoUpdate(GeneralPlugin):
             self.log("Registered mouse down callback")
         except Exception as e:
             self.log("Exception: %s" % str(e))
-
 
     @objc.python_method
     def removeCallbacks(self):
@@ -119,16 +119,13 @@ class MetricsAutoUpdate(GeneralPlugin):
         except Exception as e:
             self.log("Exception: %s" % str(e))
 
-
     @objc.python_method
     def mouseUp(self, info):
         self.isMouseDown = False
 
-
     @objc.python_method
     def mouseDown(self, info):
         self.isMouseDown = True
-
 
     # use the foreground drawing loop hook to check if metrics updates are required
     @objc.python_method
@@ -173,10 +170,14 @@ class MetricsAutoUpdate(GeneralPlugin):
             self.log("Glyph has no geometry, skip syncing")
             return
 
-        if self.currentLSB != layer.LSB or self.currentRSB != layer.RSB or \
-            self.currentWidth != layer.width or \
-            self.currentTSB != layer.TSB or self.currentBSB != layer.BSB or \
-            self.currentVertWidth != layer.vertWidth:
+        if (
+            self.currentLSB != layer.LSB
+            or self.currentRSB != layer.RSB
+            or self.currentWidth != layer.width
+            or self.currentTSB != layer.TSB
+            or self.currentBSB != layer.BSB
+            or self.currentVertWidth != layer.vertWidth
+        ):
 
             self.log("Sync metrics changes")
 
@@ -199,12 +200,11 @@ class MetricsAutoUpdate(GeneralPlugin):
     @objc.python_method
     def syncAll(self):
         for g in Glyphs.font.glyphs:
-            for l in g.layers:
-                l.beginChanges()
-                if l.metricsKeysOutOfSync() == 1 and self.layerHasContent(l):
-                    self.log("Layer was out of sync, update linked metrics %s" % str(l))
-                    l.syncMetrics()
-                    self.log("Updated layer metrics of %s to %s | %s" % (str(l), str(l.LSB), str(l.RSB)))
-                l.endChanges()
+            for layer in g.layers:
+                layer.beginChanges()
+                if layer.metricsKeysOutOfSync() == 1 and self.layerHasContent(layer):
+                    self.log("Layer was out of sync, update linked metrics %s" % str(layer))
+                    layer.syncMetrics()
+                    self.log("Updated layer metrics of %s to %s | %s" % (str(layer), str(layer.LSB), str(layer.RSB)))
+                layer.endChanges()
         self.log("REDRAW")
-
