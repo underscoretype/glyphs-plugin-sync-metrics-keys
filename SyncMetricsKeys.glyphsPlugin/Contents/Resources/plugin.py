@@ -74,7 +74,6 @@ class MetricsAutoUpdate(GeneralPlugin):
         if self.logging:
             self.logToConsole(message)
 
-    @objc.python_method
     def toggleMenu_(self, sender):
         self.log("Toggle menu")
         self.log(Glyphs.defaults["com.underscoretype.SyncMetricsKeys.state"])
